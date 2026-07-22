@@ -181,9 +181,20 @@ function updateRendering() {
       endPos.x - startPos.x, thickness);
   }
   updateSelectionBounds();
-  alt.textContent = text;
-  getSelection().setBaseAndExtent(alt.firstChild, selectionStart,
-                                  alt.firstChild, selectionEnd);
+
+  alt.replaceChildren();
+  for (const line of text.split('\n')) {
+    const paragraph = document.createElement('p');
+    paragraph.append(line || ' ');
+    alt.append(paragraph);
+  }
+
+  const {row: startRow, column: startColumn} = charIndexToRowColumn(selectionStart)
+  const {row: endRow, column: endColumn} = charIndexToRowColumn(selectionEnd)
+  const startRowNode = alt.querySelectorAll('p')[startRow].firstChild;
+  const endRowNode = alt.querySelectorAll('p')[endRow].firstChild;
+  getSelection().setBaseAndExtent(startRowNode, startColumn,
+                                  endRowNode, endColumn);
 }
 
 editContext.addEventListener('textupdate', e => {
@@ -326,3 +337,11 @@ new ResizeObserver(() => {
   updateControlBounds();
   updateRendering();
 }).observe(resizer);
+
+const showAlt = document.getElementById('show-alt');
+function updateShowAlt() {
+  alt.style.opacity = showAlt.checked ? 0.5 : 0;
+}
+
+updateShowAlt();
+showAlt.addEventListener('change', updateShowAlt);
