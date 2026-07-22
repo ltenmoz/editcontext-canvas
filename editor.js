@@ -1,5 +1,8 @@
 'use strict';
 
+const canvas = document.getElementById('canvas');
+const alt = document.getElementById('alt');
+
 const ctx = canvas.getContext('2d');
 const editContext = canvas.editContext = new EditContext();
 const charHeight = 18;
@@ -25,7 +28,7 @@ function wordForwards(i) {
   const text = editContext.text;
   while (i < text.length && /\s/.test(text[i]))
     i++;
-  while (i < text.length &&  !/\s/.test(text[i]))
+  while (i < text.length && !/\s/.test(text[i]))
     i++;
   return i;
 }
@@ -103,9 +106,9 @@ function updateCanvas() {
     const caretPos = characterPos(selectionStart);
     ctx.fillRect(caretPos.x, caretPos.y, 1, charHeight + 1);
   }
-  fallback.textContent = text;
-  getSelection().setBaseAndExtent(fallback.firstChild, selectionStart,
-                                  fallback.firstChild, selectionEnd);
+  alt.textContent = text;
+  getSelection().setBaseAndExtent(alt.firstChild, selectionStart,
+                                  alt.firstChild, selectionEnd);
 }
 
 editContext.ontextupdate = e => {
