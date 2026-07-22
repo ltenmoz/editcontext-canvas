@@ -1,7 +1,14 @@
 'use strict';
 
 const canvas = document.getElementById('canvas');
+const resizer = document.getElementById('resizer');
 const alt = document.getElementById('alt');
+
+new ResizeObserver(() => {
+  canvas.width = parseInt(resizer.style.width);
+  canvas.height = parseInt(resizer.style.height);
+  updateCanvas();
+}).observe(resizer);
 
 const ctx = canvas.getContext('2d');
 const editContext = canvas.editContext = new EditContext();
@@ -82,11 +89,12 @@ function characterPos(i) {
 }
 
 function updateCanvas() {
+  const isFocused = document.activeElement === canvas;
   const {text, selectionStart, selectionEnd} = editContext;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   let y = charHeight + margin;
   ctx.fillStyle = '#acf';
-  if (selectionStart !== selectionEnd) {
+  if (selectionStart !== selectionEnd && isFocused) {
     // draw selection
     let {row, column} = charIndexToRowColumn(Math.min(selectionStart, selectionEnd));
     const {row: endRow, column: endColumn} = charIndexToRowColumn(Math.max(selectionStart, selectionEnd));
@@ -97,12 +105,13 @@ function updateCanvas() {
       column = 0;
     }
   }
+  ctx.font = charHeight + 'px monospace';
   ctx.fillStyle = '#000';
   for (let line of text.split('\n')) {
     ctx.fillText(line, margin, y);
     y += lineSpacing;
   }
-  if (selectionStart === selectionEnd) {
+  if (selectionStart === selectionEnd && isFocused) {
     // draw caret
     const caretPos = characterPos(selectionStart);
     ctx.fillRect(caretPos.x, caretPos.y, 1, charHeight + 1);
@@ -169,3 +178,5 @@ canvas.onclick = e => {
   updateCanvas();
 };
 canvas.focus();
+canvas.addEventListener('focusin', updateCanvas);
+canvas.addEventListener('focusout', updateCanvas);
