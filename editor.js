@@ -4,20 +4,21 @@ const canvas = document.getElementById('canvas');
 const resizer = document.getElementById('resizer');
 const alt = document.getElementById('alt');
 
-new ResizeObserver(() => {
-  canvas.width = parseInt(resizer.style.width);
-  canvas.height = parseInt(resizer.style.height);
-  updateRendering();
-}).observe(resizer);
 
 const ctx = canvas.getContext('2d');
 const editContext = canvas.editContext = new EditContext();
 const charHeight = 18;
 const margin = 5;
-ctx.font = charHeight + 'px monospace'; // use a monospace font to make hit testing easier
-const charWidth = ctx.measureText('a').width;
+ctx.font = charHeight + 'px sans-serif';
 const lineSpacing = charHeight * 1.25;
 let textFormats = [];
+
+new ResizeObserver(() => {
+  canvas.width = parseInt(resizer.style.width);
+  canvas.height = parseInt(resizer.style.height);
+  ctx.font = charHeight + 'px sans-serif';
+  updateRendering();
+}).observe(resizer);
 
 // Get index of start of word at character index i.
 function wordBackwards(i) {
@@ -43,23 +44,6 @@ function wordForwards(i) {
   return i;
 }
 
-// Get index of text at coordinate (x, y)
-function hitTest(x, y) {
-  x -= margin;
-  y -= margin;
-  const lineIndex = Math.floor(y / lineSpacing);
-  const {text} = editContext;
-  const lines = text.split('\n');
-  const line = lines[lineIndex];
-  if (line === undefined) return text.length;
-  let lineOffset = 0;
-  for (let i = 0; i < lineIndex; i++) {
-    lineOffset += lines[i].length + 1;
-  }
-  return lineOffset + Math.min(Math.round(x / charWidth), line.length);
-}
-
-
 function charIndexToRowColumn(i) {
   const {text} = editContext;
   let startOfLine = i;
@@ -82,11 +66,42 @@ function rowColumnToCharIndex(row, column) {
   return index + Math.min(column, lines[row]?.length || 0);
 }
 
+// Get index of text at coordinate (x, y)
+function hitTest(x, y) {
+  x -= margin;
+  y -= margin;
+  const lineIndex = Math.floor(y / lineSpacing);
+  const {text} = editContext;
+  const lines = text.split('\n');
+  const line = lines[lineIndex];
+  if (line === undefined) return text.length;
+  let lineOffset = 0;
+  for (let i = 0; i < lineIndex; i++) {
+    lineOffset += lines[i].length + 1;
+  }
+  // This isn't ideal for performance - ideally some kind of binary search would be involved.
+  // Handling all scripts and mixed directionality correctly is quite tricky!
+  let prevWidth = 0;
+  for (let i = 0; i <= line.length; i++) {
+    let {width} = ctx.measureText(line.substring(0, i));
+    if (width > x || i === line.length) {
+      if (i > 0 && x < (prevWidth + width) / 2) {
+        // Clicked on the left side of the character - so
+        // return the previous index.
+        return lineOffset + i - 1;
+      }
+      return lineOffset + i;
+    }
+    prevWidth = width;
+  }
+}
+
 // Get position of character at index i
 function characterPos(i) {
   const {row, column} = charIndexToRowColumn(i);
+  const lineText = editContext.text.split('\n')[row];
   return {
-    x: column * charWidth + margin,
+    x: ctx.measureText(lineText.substring(0, column)).width + margin,
     y: row * lineSpacing + margin,
   };
 }
@@ -106,13 +121,12 @@ function updateRendering() {
       let end = characterPos(rowColumnToCharIndex(row, row === endRow ? endColumn : Infinity));
       if (row !== endRow) {
         // Add a bit of extra highlighted area to indicate that line break is selected.
-        end.x += charWidth;
+        end.x += charHeight / 2;
       }
       ctx.fillRect(start.x, start.y, end.x - start.x, charHeight + 2);
       column = 0;
     }
   }
-  ctx.font = charHeight + 'px monospace';
   ctx.fillStyle = '#000';
   for (let line of text.split('\n')) {
     ctx.fillText(line, margin, y);
@@ -188,7 +202,24 @@ canvas.addEventListener('keydown', e => {
       e.shiftKey ? editContext.selectionStart : newEnd,
       newEnd);
     updateRendering();
-  } else if (e.key === 'a' &&  e.ctrlKey) {
+  } else if (e.key === 'Home') {
+    const end = editContext.selectionEnd;
+    const {row, column} = charIndexToRowColumn(end);
+    const newEnd = e.ctrlKey ? 0 : rowColumnToCharIndex(row, 0);
+    editContext.updateSelection(
+      e.shiftKey ? editContext.selectionStart : newEnd,
+      newEnd);
+    updateRendering();
+  } else if (e.key === 'End') {
+    const end = editContext.selectionEnd;
+    const {row, column} = charIndexToRowColumn(end);
+    const newEnd = e.ctrlKey ? editContext.text.length
+      : rowColumnToCharIndex(row, Infinity);
+    editContext.updateSelection(
+      e.shiftKey ? editContext.selectionStart : newEnd,
+      newEnd);
+    updateRendering();
+  } else if (e.key === 'a' && e.ctrlKey) {
     editContext.updateSelection(0, editContext.text.length);
     updateRendering();
   }
