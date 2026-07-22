@@ -13,12 +13,46 @@ ctx.font = charHeight + 'px sans-serif';
 const lineSpacing = charHeight * 1.25;
 let textFormats = [];
 
-new ResizeObserver(() => {
-  canvas.width = parseInt(resizer.style.width);
-  canvas.height = parseInt(resizer.style.height);
-  ctx.font = charHeight + 'px sans-serif';
-  updateRendering();
-}).observe(resizer);
+function updateControlBounds() {
+  editContext.updateControlBounds(canvas.getBoundingClientRect());
+}
+updateControlBounds();
+
+function updateSelectionBounds() {
+  const {text, selectionStart, selectionEnd} = editContext;
+  const {row: startRow, column: startColumn} =
+    charIndexToRowColumn(selectionStart);
+  const {row: endRow, column: endColumn} =
+    charIndexToRowColumn(selectionEnd);
+  let canvasRect = canvas.getBoundingClientRect();
+  canvasRect.x += margin;
+  canvasRect.y += margin;
+  canvasRect.width -= 2 * margin;
+  canvasRect.height -= 2 * margin;
+  const startPos = characterPos(selectionStart);
+  const endPos = characterPos(selectionEnd);
+  if (startRow === endRow) {
+    editContext.updateSelectionBounds(new DOMRect(
+      canvasRect.left + startPos.x,
+      canvasRect.top + startPos.y,
+      endPos.x - startPos.x,
+      charHeight
+    ));
+  } else {
+    // give the rectangle containing the full lines as the selection bounds
+    editContext.updateSelectionBounds(new DOMRect(
+      canvasRect.left,
+      canvasRect.top + startPos.y,
+      canvasRect.width,
+      endPos.y + charHeight - startPos.y,
+    ));
+  }
+}
+
+function setSelection(selectionStart, selectionEnd) {
+  editContext.updateSelection(selectionStart, selectionEnd);
+  updateSelectionBounds();
+}
 
 // Get index of start of word at character index i.
 function wordBackwards(i) {
@@ -146,6 +180,7 @@ function updateRendering() {
     ctx.fillRect(startPos.x, startPos.y + charHeight,
       endPos.x - startPos.x, thickness);
   }
+  updateSelectionBounds();
   alt.textContent = text;
   getSelection().setBaseAndExtent(alt.firstChild, selectionStart,
                                   alt.firstChild, selectionEnd);
@@ -156,11 +191,24 @@ editContext.addEventListener('textupdate', e => {
   editContext.updateSelection(e.selectionStart, e.selectionEnd);
   updateRendering();
 });
-editContext.addEventListener('characterboundsupdate', () => {
-  // TODO: Improve this
-  editContext.updateCharacterBounds(0,
-    new Array(editContext.text.length).fill().map((_, i) => new DOMRect(i*20,0,20,10)));
+
+editContext.addEventListener('characterboundsupdate', e => {
+  const {text} = editContext;
+  let rects = [];
+  let pos = characterPos(e.rangeStart);
+  // Get character bounds from e.rangeStart to e.rangeEnd
+  for (let i = e.rangeStart; i < e.rangeEnd; i++) {
+    let posNext = characterPos(i+1);
+    // For the bounds of '\n', we will just use a rectangle with width 1.
+    rects.push(new DOMRect(pos.x, pos.y,
+      i + 1 >= text.length || text[i] === '\n' ?
+        1 : posNext.x - pos.x,
+      charHeight));
+    pos = posNext;
+  }
+  e.updateCharacterBounds(e.rangeStart, rects);
 });
+
 editContext.addEventListener('textformatupdate', e => {
   textFormats = e.getTextFormats();
   updateRendering();
@@ -270,3 +318,11 @@ canvas.focus();
 // should either disappear or reappear.
 canvas.addEventListener('focus', updateRendering);
 canvas.addEventListener('blur', updateRendering);
+
+new ResizeObserver(() => {
+  canvas.width = parseInt(resizer.style.width);
+  canvas.height = parseInt(resizer.style.height);
+  ctx.font = charHeight + 'px sans-serif';
+  updateControlBounds();
+  updateRendering();
+}).observe(resizer);
