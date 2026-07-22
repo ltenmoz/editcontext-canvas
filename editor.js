@@ -62,6 +62,7 @@ function charIndexToRowColumn(i) {
 }
 
 function rowColumnToCharIndex(row, column) {
+  if (row < 0) return 0;
   const {text} = editContext;
   const lines = text.split('\n');
   let index = 0;
@@ -144,7 +145,6 @@ canvas.onkeydown = e => {
   } else if (e.key === 'ArrowUp') {
     const end = editContext.selectionEnd;
     const {row, column} = charIndexToRowColumn(end);
-    if (row === 0) return;
     const newEnd = rowColumnToCharIndex(row - 1, column);
     editContext.updateSelection(
       e.shiftKey ? editContext.selectionStart : newEnd,
