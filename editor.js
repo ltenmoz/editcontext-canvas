@@ -217,7 +217,7 @@ editContext.addEventListener('characterboundsupdate', e => {
       charHeight));
     pos = posNext;
   }
-  e.updateCharacterBounds(e.rangeStart, rects);
+  editContext.updateCharacterBounds(e.rangeStart, rects);
 });
 
 editContext.addEventListener('textformatupdate', e => {
