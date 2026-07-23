@@ -11,9 +11,14 @@
   overflow: hidden;
   position: relative;
 }
+/* Give #resizer the focus outline so it isn't cut off. */
+#resizer:has(:focus) {
+  outline: 2px solid darkorange;
+}
 #canvas {
   width: 100%;
   height: 100%;
+  outline: 0;
 }
 #alt {
   position: absolute;
