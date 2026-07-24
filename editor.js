@@ -18,6 +18,9 @@ function updateControlBounds() {
 }
 updateControlBounds();
 
+// Store selection bounds for the "Show selection bounds" debug option.
+let selectionBounds;
+
 function updateSelectionBounds() {
   const {text, selectionStart, selectionEnd} = editContext;
   const {row: startRow, column: startColumn} =
@@ -25,28 +28,25 @@ function updateSelectionBounds() {
   const {row: endRow, column: endColumn} =
     charIndexToRowColumn(selectionEnd);
   let canvasRect = canvas.getBoundingClientRect();
-  canvasRect.x += margin;
-  canvasRect.y += margin;
-  canvasRect.width -= 2 * margin;
-  canvasRect.height -= 2 * margin;
   const startPos = characterPos(selectionStart);
   const endPos = characterPos(selectionEnd);
   if (startRow === endRow) {
-    editContext.updateSelectionBounds(new DOMRect(
+    selectionBounds = new DOMRect(
       canvasRect.left + startPos.x,
       canvasRect.top + startPos.y,
       endPos.x - startPos.x,
       charHeight
-    ));
+    );
   } else {
     // give the rectangle containing the full lines as the selection bounds
-    editContext.updateSelectionBounds(new DOMRect(
+    selectionBounds = new DOMRect(
       canvasRect.left,
       canvasRect.top + startPos.y,
       canvasRect.width,
       endPos.y + charHeight - startPos.y,
-    ));
+    );
   }
+  editContext.updateSelectionBounds(selectionBounds);
 }
 
 function setSelection(selectionStart, selectionEnd) {
@@ -181,6 +181,14 @@ function updateRendering() {
       endPos.x - startPos.x, thickness);
   }
   updateSelectionBounds();
+  if (selectionBounds && document.getElementById('show-selection-bounds').checked) {
+    // Render selection bounds
+    ctx.strokeStyle = '#00f';
+    const canvasRect = canvas.getBoundingClientRect();
+    ctx.strokeRect(selectionBounds.x - canvasRect.x,
+      selectionBounds.y - canvasRect.y,
+      selectionBounds.width, selectionBounds.height);
+  }
 
   alt.replaceChildren();
   for (const line of text.split('\n')) {
