@@ -55,7 +55,7 @@ function rowColumnToCharIndex(row, column) {
   const lines = text.split('\n');
   let index = 0;
   for (let i = 0; i < row; i++) {
-    index += lines[i].length + 1;
+    index += lines[i].length + (i == lines.length - 1 ? 0 : 1);
   }
   return index + Math.min(column, lines[row]?.length || 0);
 }
