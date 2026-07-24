@@ -3,7 +3,8 @@
 const canvas = document.getElementById('canvas');
 const resizer = document.getElementById('resizer');
 const alt = document.getElementById('alt');
-
+const showCharacterBounds = document.getElementById('show-character-bounds');
+const showSelectionBounds = document.getElementById('show-selection-bounds');
 
 const ctx = canvas.getContext('2d');
 const editContext = canvas.editContext = new EditContext();
@@ -12,47 +13,6 @@ const margin = 5;
 ctx.font = charHeight + 'px sans-serif';
 const lineSpacing = charHeight * 1.25;
 let textFormats = [];
-
-function updateControlBounds() {
-  editContext.updateControlBounds(canvas.getBoundingClientRect());
-}
-updateControlBounds();
-
-// Store selection bounds for the "Show selection bounds" debug option.
-let selectionBounds;
-
-function updateSelectionBounds() {
-  const {text, selectionStart, selectionEnd} = editContext;
-  const {row: startRow, column: startColumn} =
-    charIndexToRowColumn(selectionStart);
-  const {row: endRow, column: endColumn} =
-    charIndexToRowColumn(selectionEnd);
-  let canvasRect = canvas.getBoundingClientRect();
-  const startPos = characterPos(selectionStart);
-  const endPos = characterPos(selectionEnd);
-  if (startRow === endRow) {
-    selectionBounds = new DOMRect(
-      canvasRect.left + startPos.x,
-      canvasRect.top + startPos.y,
-      endPos.x - startPos.x,
-      charHeight
-    );
-  } else {
-    // give the rectangle containing the full lines as the selection bounds
-    selectionBounds = new DOMRect(
-      canvasRect.left,
-      canvasRect.top + startPos.y,
-      canvasRect.width,
-      endPos.y + charHeight - startPos.y,
-    );
-  }
-  editContext.updateSelectionBounds(selectionBounds);
-}
-
-function setSelection(selectionStart, selectionEnd) {
-  editContext.updateSelection(selectionStart, selectionEnd);
-  updateSelectionBounds();
-}
 
 // Get index of start of word at character index i.
 function wordBackwards(i) {
@@ -140,28 +100,68 @@ function characterPos(i) {
   };
 }
 
+// Get array of (canvas-relative) rectangles for the text between rangeStart and rangeEnd.
+function rangeToRects(rangeStart, rangeEnd) {
+  let {row, column} = charIndexToRowColumn(Math.min(rangeStart, rangeEnd));
+  const {row: endRow, column: endColumn} = charIndexToRowColumn(Math.max(rangeStart, rangeEnd));
+  const rects = [];
+  for (; row <= endRow; row++) {
+    const start = characterPos(rowColumnToCharIndex(row, column));
+    const end = characterPos(rowColumnToCharIndex(row, row === endRow ? endColumn : Infinity));
+    column = 0;
+    rects.push(new DOMRect(start.x, start.y, end.x - start.x, charHeight + 2));
+  }
+  return rects;
+}
+
+function updateControlBounds() {
+  editContext.updateControlBounds(canvas.getBoundingClientRect());
+}
+updateControlBounds();
+
+// Store selection bounds for the "Show selection bounds" debug option.
+let selectionBounds;
+
+function updateSelectionBounds() {
+  const {text, selectionStart, selectionEnd} = editContext;
+  const canvasRect = canvas.getBoundingClientRect();
+  const rects = rangeToRects(selectionStart, selectionEnd);
+  let {left, right, top, bottom} = rects[0];
+  for (let i = 1; i < rects.length; i++) {
+    let rect = rects[i];
+    left = Math.min(left, rect.left);
+    top = Math.min(top, rect.top);
+    right = Math.max(right, rect.right);
+    bottom = Math.max(bottom, rect.bottom);
+  }
+  selectionBounds = new DOMRect(canvasRect.x + left, canvasRect.y + top, right - left, bottom - top);
+  editContext.updateSelectionBounds(selectionBounds);
+}
+
+function setSelection(selectionStart, selectionEnd) {
+  editContext.updateSelection(selectionStart, selectionEnd);
+  updateSelectionBounds();
+}
+
 function updateRendering() {
   const isFocused = document.activeElement === canvas;
   const {text, selectionStart, selectionEnd} = editContext;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   let y = charHeight + margin;
-  ctx.fillStyle = '#acf';
+  ctx.fillStyle = 'lightblue';
   if (selectionStart !== selectionEnd && isFocused) {
     // draw selection
-    let {row, column} = charIndexToRowColumn(Math.min(selectionStart, selectionEnd));
-    const {row: endRow, column: endColumn} = charIndexToRowColumn(Math.max(selectionStart, selectionEnd));
-    for (; row <= endRow; row++) {
-      let start = characterPos(rowColumnToCharIndex(row, column));
-      let end = characterPos(rowColumnToCharIndex(row, row === endRow ? endColumn : Infinity));
-      if (row !== endRow) {
-        // Add a bit of extra highlighted area to indicate that line break is selected.
-        end.x += charHeight / 2;
+    const selectionRects = rangeToRects(selectionStart, selectionEnd);
+    for (let i = 0; i < selectionRects.length; i++) {
+      const rect = selectionRects[i];
+      if (i + 1 < selectionRects.length) {
+        // Add a bit of extra highlighted area, to indicate that the line break is selected.
+        rect.width += charHeight / 2;
       }
-      ctx.fillRect(start.x, start.y, end.x - start.x, charHeight + 2);
-      column = 0;
+      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
     }
   }
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = 'black';
   for (let line of text.split('\n')) {
     ctx.fillText(line, margin, y);
     y += lineSpacing;
@@ -181,13 +181,22 @@ function updateRendering() {
       endPos.x - startPos.x, thickness);
   }
   updateSelectionBounds();
-  if (selectionBounds && document.getElementById('show-selection-bounds').checked) {
+  ctx.lineWidth = 2;
+  if (selectionBounds && showSelectionBounds.checked) {
     // Render selection bounds
-    ctx.strokeStyle = '#00f';
+    ctx.strokeStyle = 'blue';
     const canvasRect = canvas.getBoundingClientRect();
     ctx.strokeRect(selectionBounds.x - canvasRect.x,
       selectionBounds.y - canvasRect.y,
       selectionBounds.width, selectionBounds.height);
+  }
+
+  if (showCharacterBounds.checked) {
+    const bounds = editContext.characterBounds();
+    ctx.strokeStyle = 'red';
+    for (const bound of bounds) {
+      ctx.strokeRect(bound.x, bound.y, bound.width, bound.height);
+    }
   }
 
   alt.replaceChildren();
@@ -353,3 +362,5 @@ function updateShowAlt() {
 
 updateShowAlt();
 showAlt.addEventListener('change', updateShowAlt);
+showSelectionBounds.addEventListener('change', updateRendering);
+showCharacterBounds.addEventListener('change', updateRendering);
