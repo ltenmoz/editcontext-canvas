@@ -355,12 +355,5 @@ new ResizeObserver(() => {
   updateRendering();
 }).observe(resizer);
 
-const showAlt = document.getElementById('show-alt');
-function updateShowAlt() {
-  alt.style.opacity = showAlt.checked ? 0.5 : 0;
-}
-
-updateShowAlt();
-showAlt.addEventListener('change', updateShowAlt);
 showSelectionBounds.addEventListener('change', updateRendering);
 showCharacterBounds.addEventListener('change', updateRendering);
